@@ -1,42 +1,88 @@
 # Search Card
 
-Quickly search for entities from a Lovelace card.
+A Lovelace card that enables quick entity searching with customizable actions.
 
 ## Features
 
-* Search for entities and display results in frontend
-* More to come...
+- 🔍 Quick entity search within the Home Assistant frontend
+- ⚡ Custom actions with regex-based matching
+- 🎯 Domain filtering (include/exclude specific domains)
+- 📋 Configurable result limits and placeholder text
 
-## Roadmap
+## Prerequisites
 
-Some things I want to add in upcoming releases:
-
-* Exclude domains and/or entities from results
-* More polished UI
-* Button to show all results (to override "max results")
-* Add to HACS
+- Home Assistant
+- [card-tools](https://github.com/thomasloven/lovelace-card-tools)
 
 ## Using the card
 
 ### Options
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| max_results | integer | 10 | Max results to show by default
+| Name             | Type     | Default             | Description                                 |
+| ---------------- | -------- | ------------------- | ------------------------------------------- |
+| max_results      | integer  | 10                  | Maximum number of search results to display |
+| search_text      | string   | "Type to search..." | Custom placeholder text                     |
+| actions          | object   | optional            | Custom action definitions                   |
+| included_domains | string[] | optional            | Only show entities from these domains\*     |
+| excluded_domains | string[] | optional            | Hide entities from these domains\*          |
 
-### Example
+\*Note: `included_domains` and `excluded_domains` cannot be used together
 
-  ```yaml
-  - type: custom:search-card
-    max_results: 10
-  ```
+### Example Configuration
 
-## Issues and imitations
+```yaml
+type: custom:search-card
+max_results: 10
+search_text: "Search entities..."
+excluded_domains:
+  - automation
+  - script
+```
 
-This is still an early version and may contain bugs. If you find any problems, please write an issue.
+### Domain Filtering Example
 
-## Getting errors?
+Include only lights and switches:
 
-Clear the browser cache, restart Home Assistant and make sure the configuration is correct.
+```yaml
+type: custom:search-card
+included_domains:
+  - light
+  - switch
+```
 
-If you believe you have found an error, please write an issue.
+### Custom Actions Example
+
+```yaml
+type: custom:search-card
+actions:
+  - matches: '^toggle (.+\..+)'
+    name: "Toggle {1}"
+    service: homeassistant.toggle
+    service_data:
+      entity_id: { 1 }
+```
+
+## Issues and Troubleshooting
+
+If you encounter issues:
+
+1. Clear browser cache
+2. Restart Home Assistant
+3. Verify card-tools is properly installed
+4. Check your configuration syntax
+
+If you believe you have found an error, please create an issue with:
+
+- Your configuration
+- Home Assistant version
+- Browser and version
+- Error messages (if any)
+
+## Roadmap
+
+Planned features:
+
+- Entity exclusion list
+- "Show all" results button
+- Additional action types
+- More polished UI
