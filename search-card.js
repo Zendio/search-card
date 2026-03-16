@@ -4,9 +4,7 @@ const BUILTIN_ACTIONS = [
     name: "Add to Transmission",
     icon: "mdi:progress-download",
     service: "transmission.add_torrent",
-    service_data: {
-      torrent: "{1}",
-    },
+    service_data: { torrent: "{1}" },
   },
 ];
 
@@ -26,82 +24,69 @@ class SearchCard extends HTMLElement {
     this._hass = null;
     this._config = null;
     this.attachShadow({ mode: "open" });
-    this._debouncedSearch = this._debounce((searchText) => {
-      this._performSearch(searchText);
-    }, 100);
+    this._debouncedSearch = this._debounce((v) => this._performSearch(v), 100);
   }
 
   set hass(hass) {
     this._hass = hass;
     this.shadowRoot.querySelectorAll("state-badge").forEach((badge) => {
-      const entityId = badge.dataset.entity;
-      if (entityId && hass.states[entityId]) {
-        badge.stateObj = hass.states[entityId];
-        badge.hass = hass;
-      }
+      const id = badge.dataset.entity;
+      if (id && hass.states[id]) { badge.stateObj = hass.states[id]; badge.hass = hass; }
     });
     this.shadowRoot.querySelectorAll(".entity-state").forEach((el) => {
-      const entityId = el.dataset.entity;
-      if (entityId && hass.states[entityId]) {
-        el.textContent = this._formatState(hass.states[entityId]);
-      }
+      const id = el.dataset.entity;
+      if (id && hass.states[id]) el.textContent = this._formatState(hass.states[id]);
     });
   }
 
   setConfig(config) {
     this._config = config;
     this._maxResults = config.max_results || 10;
-    this._searchText = config.search_text || "Search entities…";
+    this._searchPlaceholder = config.search_text || "Search entities…";
     this._actions = BUILTIN_ACTIONS.concat(config.actions || []);
     this._includedDomains = config.included_domains;
     this._excludedDomains = config.excluded_domains || [];
     this._render();
   }
 
-  getCardSize() {
-    return 4;
-  }
+  getCardSize() { return 4; }
 
   _render() {
     this.shadowRoot.innerHTML = `
       <style>
         :host { display: block; }
 
+        /* Transparante ha-card wrapper — geen witte rechthoek */
         ha-card {
           background: transparent !important;
           box-shadow: none !important;
           border: none !important;
         }
 
-        /* ── Search bar area ── */
-        #searchContainer {
-          padding: 0;
-        }
-
-        /* Search wrap als kaart — zelfde look als andere HA kaarten */
+        /* ── Zoekbalk: pill-shaped kaart ── */
         #searchWrap {
           display: flex;
           align-items: center;
           height: 56px;
           border-radius: 28px;
-          padding: 0 4px 0 16px;
+          padding: 0 8px 0 16px;
           background: var(--card-background-color, #fff);
-          box-shadow: var(--ha-card-box-shadow, 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12), 0 3px 1px -2px rgba(0,0,0,.2));
-          transition: box-shadow 0.15s ease;
+          box-shadow: 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12), 0 3px 1px -2px rgba(0,0,0,.2);
+          transition: box-shadow 0.2s ease;
           box-sizing: border-box;
         }
 
         #searchWrap:focus-within {
-          box-shadow: 0 2px 8px 0 rgba(0,0,0,.18), 0 1px 5px 0 rgba(0,0,0,.14), 0 0 0 2px var(--mdc-theme-primary, #009ac7);
+          box-shadow: 0 2px 8px 0 rgba(0,0,0,.18), 0 0 0 2px var(--mdc-theme-primary, #009ac7);
         }
 
         #searchIcon {
           flex-shrink: 0;
-          color: var(--input-label-ink-color, rgba(0,0,0,0.6));
-          --mdc-icon-size: 20px;
-          margin-right: 8px;
+          color: var(--secondary-text-color, rgba(0,0,0,0.54));
+          --mdc-icon-size: 22px;
           display: flex;
           align-items: center;
+          margin-right: 10px;
         }
 
         #searchInput {
@@ -111,14 +96,13 @@ class SearchCard extends HTMLElement {
           background: transparent;
           font-family: inherit;
           font-size: 16px;
-          line-height: 24px;
           color: var(--primary-text-color, rgba(0,0,0,0.87));
           caret-color: var(--mdc-theme-primary, #009ac7);
           min-width: 0;
         }
 
         #searchInput::placeholder {
-          color: var(--input-label-ink-color, rgba(0,0,0,0.6));
+          color: var(--secondary-text-color, rgba(0,0,0,0.54));
         }
 
         #clearBtn {
@@ -126,9 +110,6 @@ class SearchCard extends HTMLElement {
           opacity: 0;
           pointer-events: none;
           transition: opacity 0.15s ease;
-          color: var(--input-label-ink-color, rgba(0,0,0,0.6));
-          --mdc-icon-button-size: 36px;
-          --mdc-icon-size: 18px;
           cursor: pointer;
           background: none;
           border: none;
@@ -139,6 +120,8 @@ class SearchCard extends HTMLElement {
           width: 36px;
           height: 36px;
           border-radius: 50%;
+          color: var(--secondary-text-color, rgba(0,0,0,0.54));
+          --mdc-icon-size: 18px;
         }
 
         #clearBtn.visible {
@@ -147,7 +130,22 @@ class SearchCard extends HTMLElement {
         }
 
         #clearBtn:hover {
-          background: rgba(var(--rgb-primary-text-color, 0,0,0), 0.06);
+          background: rgba(0,0,0,0.06);
+        }
+
+        /* ── Resultatenkaart ── */
+        #resultsCard {
+          display: none;
+          margin-top: 8px;
+          background: var(--card-background-color, #fff);
+          border-radius: 12px;
+          box-shadow: 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12), 0 3px 1px -2px rgba(0,0,0,.2);
+          overflow: hidden;
+          padding: 8px 16px 8px 16px;
+        }
+
+        #resultsCard.visible {
+          display: block;
         }
 
         #count {
@@ -155,21 +153,10 @@ class SearchCard extends HTMLElement {
           font-style: italic;
           font-size: 12px;
           color: var(--secondary-text-color);
-          padding: 4px 0 0 0;
+          padding: 2px 0 6px 0;
         }
 
-        /* ── Results ── */
-        #results:empty {
-          display: none;
-        }
-        #results {
-          padding: 8px 0 0 0;
-        }
-        #count:empty {
-          display: none;
-        }
-
-        /* ── Entity row: exact native HA sizing ── */
+        /* ── Entity row: exact native HA maten ── */
         .entity-row {
           display: flex;
           align-items: center;
@@ -182,7 +169,7 @@ class SearchCard extends HTMLElement {
         }
 
         .entity-row:hover {
-          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.05);
+          background-color: rgba(0,0,0,0.05);
         }
 
         .entity-row state-badge {
@@ -225,7 +212,7 @@ class SearchCard extends HTMLElement {
         }
 
         .action-row:hover {
-          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.05);
+          background-color: rgba(0,0,0,0.05);
         }
 
         .action-icon {
@@ -252,26 +239,26 @@ class SearchCard extends HTMLElement {
       </style>
 
       <ha-card>
-        <div id="searchContainer">
-          <div id="searchWrap">
-            <span id="searchIcon">
-              <ha-icon icon="mdi:magnify"></ha-icon>
-            </span>
-            <input
-              id="searchInput"
-              type="text"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-              placeholder="${this._searchText}"
-            />
-            <button id="clearBtn" title="Clear" aria-label="Clear">
-              <ha-icon icon="mdi:close"></ha-icon>
-            </button>
-          </div>
+        <div id="searchWrap">
+          <span id="searchIcon"><ha-icon icon="mdi:magnify"></ha-icon></span>
+          <input
+            id="searchInput"
+            type="text"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="${this._searchPlaceholder}"
+          />
+          <button id="clearBtn" title="Clear" aria-label="Clear">
+            <ha-icon icon="mdi:close"></ha-icon>
+          </button>
         </div>
-        <div id="results"></div>
+
+        <div id="resultsCard">
+          <div id="count"></div>
+          <div id="rows"></div>
+        </div>
       </ha-card>
     `;
 
@@ -296,34 +283,26 @@ class SearchCard extends HTMLElement {
   }
 
   _renderResults() {
-    const resultsContainer = this.shadowRoot.getElementById("results");
-    if (!resultsContainer) return;
+    const resultsCard = this.shadowRoot.getElementById("resultsCard");
+    const countEl = this.shadowRoot.getElementById("count");
+    const rowsEl = this.shadowRoot.getElementById("rows");
+    if (!resultsCard) return;
 
     const results = this._results.slice(0, this._maxResults).sort();
+    const hasContent = results.length > 0 || this._activeActions.length > 0;
 
-    resultsContainer.innerHTML = "";
-    if (results.length === 0 && this._activeActions.length === 0) return;
+    resultsCard.classList.toggle("visible", hasContent);
+    rowsEl.innerHTML = "";
 
-    // Maak een kaart-wrapper voor de resultaten
-    const card = document.createElement("div");
-    card.className = "results-card";
+    if (!hasContent) { countEl.textContent = ""; return; }
 
-    // Count bovenaan in de kaart
-    const count = document.createElement("div");
-    count.id = "count";
-    count.textContent = results.length > 0
-      ? `Showing ${results.length} of ${this._results.length} results`
-      : "";
-    card.appendChild(count);
-
-    resultsContainer.appendChild(card);
+    countEl.textContent = `Showing ${results.length} of ${this._results.length} results`;
 
     for (const [action, matches] of this._activeActions) {
-      card.appendChild(this._createActionRow(action, matches));
+      rowsEl.appendChild(this._createActionRow(action, matches));
     }
-
     for (const entity_id of results) {
-      card.appendChild(this._createEntityRow(entity_id));
+      rowsEl.appendChild(this._createEntityRow(entity_id));
     }
   }
 
@@ -352,7 +331,6 @@ class SearchCard extends HTMLElement {
     row.appendChild(info);
     row.appendChild(stateEl);
     row.addEventListener("click", () => this._fireMoreInfo(entity_id));
-
     return row;
   }
 
@@ -386,15 +364,12 @@ class SearchCard extends HTMLElement {
       const [domain, service] = action.service.split(".");
       this._hass.callService(domain, service, service_data);
     });
-
     return row;
   }
 
   _fireMoreInfo(entityId) {
     this.dispatchEvent(new CustomEvent("hass-more-info", {
-      composed: true,
-      bubbles: true,
-      detail: { entityId },
+      composed: true, bubbles: true, detail: { entityId },
     }));
   }
 
@@ -405,7 +380,6 @@ class SearchCard extends HTMLElement {
       this._renderResults();
       return;
     }
-
     try {
       const searchRegex = new RegExp(searchText, "i");
       const newResults = [];
@@ -416,9 +390,7 @@ class SearchCard extends HTMLElement {
           (this._includedDomains
             ? this._includedDomains.includes(entity_id.split(".")[0])
             : !this._excludedDomains.includes(entity_id.split(".")[0]))
-        ) {
-          newResults.push(entity_id);
-        }
+        ) newResults.push(entity_id);
       }
       this._results = newResults;
       this._activeActions = this._getActivatedActions(searchText);
@@ -427,7 +399,6 @@ class SearchCard extends HTMLElement {
       this._results = [];
       this._activeActions = [];
     }
-
     this._renderResults();
   }
 
@@ -444,19 +415,15 @@ class SearchCard extends HTMLElement {
 
   _serviceExists(serviceCall) {
     const [domain, service] = serviceCall.split(".");
-    const servicesForDomain = this._hass?.services[domain];
-    return servicesForDomain && service in servicesForDomain;
+    const s = this._hass?.services[domain];
+    return s && service in s;
   }
 
   _debounce(func, wait) {
     let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
+    return function(...args) {
       clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
+      timeout = setTimeout(() => func(...args), wait);
     };
   }
 }
