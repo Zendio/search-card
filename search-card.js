@@ -33,8 +33,20 @@ class SearchCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    this.shadowRoot.querySelectorAll(".entity-row-element").forEach((row) => {
-      row.hass = hass;
+    // Update state icons live
+    this.shadowRoot.querySelectorAll("state-badge").forEach((badge) => {
+      const entityId = badge.dataset.entity;
+      if (entityId && hass.states[entityId]) {
+        badge.stateObj = hass.states[entityId];
+        badge.hass = hass;
+      }
+    });
+    // Update state values live
+    this.shadowRoot.querySelectorAll(".entity-state").forEach((el) => {
+      const entityId = el.dataset.entity;
+      if (entityId && hass.states[entityId]) {
+        el.textContent = this._formatState(hass.states[entityId]);
+      }
     });
   }
 
@@ -58,137 +70,134 @@ class SearchCard extends HTMLElement {
         :host {
           display: block;
         }
+
+        /* ── Card shell ── */
         ha-card {
-          padding-bottom: 8px;
+          overflow: hidden;
         }
+
+        /* ── Search area: native card-content padding ── */
         #searchContainer {
-          width: 90%;
-          display: block;
-          margin: 0 auto;
-          padding: 8px 0 4px 0;
+          padding: 16px 16px 8px 16px;
         }
+
         #searchTextFieldContainer {
           display: flex;
           align-items: center;
+          gap: 4px;
         }
+
         ha-textfield {
           flex-grow: 1;
         }
+
         #clearBtn {
-          cursor: pointer;
+          flex-shrink: 0;
           color: var(--secondary-text-color);
-          background: none;
-          border: none;
-          padding: 0;
-          margin-left: 4px;
-          display: flex;
-          align-items: center;
+          --mdc-icon-button-size: 36px;
+          --mdc-icon-size: 20px;
         }
+
         #count {
           text-align: right;
           font-style: italic;
-          font-size: 0.85em;
-          color: var(--secondary-text-color);
-          padding: 2px 0;
-        }
-        #results {
-          width: 90%;
-          display: block;
-          margin: 4px auto 0 auto;
-        }
-
-        /* Entity row — mirrors HA's own entities-card row styling */
-        .entity-row-wrapper {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          height: 52px;
-          padding: 0 8px;
-          cursor: pointer;
-          border-radius: var(--ha-card-border-radius, 4px);
-          transition: background-color 0.15s ease;
-          box-sizing: border-box;
-        }
-        .entity-row-wrapper:hover {
-          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.04);
-        }
-        .entity-icon-area {
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          margin-right: 8px;
-        }
-        .entity-icon-area ha-state-icon {
-          --mdc-icon-size: 24px;
-          color: var(--paper-item-icon-color, var(--state-icon-color, #44739e));
-        }
-        .entity-info {
-          flex: 1;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        }
-        .entity-name {
-          font-size: 14px;
-          font-weight: 500;
-          color: var(--primary-text-color);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          line-height: 1.3;
-        }
-        .entity-id {
           font-size: 12px;
           color: var(--secondary-text-color);
+          padding: 4px 0 0 0;
+          min-height: 18px;
+        }
+
+        /* ── Results area: mirrors card-content 16px padding ── */
+        #results {
+          padding: 0 16px 16px 16px;
+        }
+
+        /* ── Entity row: exact match to native hui-*-entity-row ── */
+        .entity-row {
+          display: flex;
+          align-items: center;
+          height: 40px;
+          cursor: pointer;
+          border-radius: var(--ha-card-border-radius, 12px);
+          transition: background-color 0.12s ease;
+          /* negative side margin so hover bg bleeds to edges, then compensate */
+          margin: 0 -4px;
+          padding: 0 4px;
+        }
+
+        .entity-row:hover {
+          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.05);
+        }
+
+        /* state-badge is 40x40, no extra margin needed */
+        .entity-row state-badge {
+          flex-shrink: 0;
+          width: 40px;
+          height: 40px;
+        }
+
+        /* Info block: padding-left 16px padding-right 8px, exact native values */
+        .entity-info {
+          flex: 1 1 auto;
+          min-width: 0;
+          padding: 0 8px 0 16px;
+          font-size: 14px;
+          line-height: 22.4px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          line-height: 1.3;
-        }
-        .entity-state {
-          font-size: 14px;
           color: var(--primary-text-color);
-          white-space: nowrap;
-          margin-left: 8px;
-          flex-shrink: 0;
-          text-align: right;
         }
 
-        /* Action row */
+        /* State value: right-aligned, same font as native */
+        .entity-state {
+          flex-shrink: 0;
+          font-size: 14px;
+          line-height: 22.4px;
+          color: var(--primary-text-color);
+          text-align: right;
+          white-space: nowrap;
+        }
+
+        /* ── Action row ── */
         .action-row {
           display: flex;
           align-items: center;
-          height: 52px;
-          padding: 0 8px;
+          height: 40px;
           cursor: pointer;
-          border-radius: var(--ha-card-border-radius, 4px);
-          transition: background-color 0.15s ease;
-          box-sizing: border-box;
+          border-radius: var(--ha-card-border-radius, 12px);
+          transition: background-color 0.12s ease;
+          margin: 0 -4px;
+          padding: 0 4px;
         }
+
         .action-row:hover {
-          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.04);
+          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.05);
         }
-        .action-icon-area {
+
+        .action-icon {
+          flex-shrink: 0;
           width: 40px;
           height: 40px;
           display: flex;
           align-items: center;
           justify-content: center;
-          flex-shrink: 0;
-          margin-right: 8px;
-          color: var(--paper-item-icon-color, #44739e);
+          color: var(--paper-item-icon-color, var(--state-icon-color, #44739e));
           --mdc-icon-size: 24px;
         }
+
         .action-name {
+          flex: 1;
+          padding: 0 8px 0 16px;
           font-size: 14px;
-          font-weight: 500;
+          line-height: 22.4px;
           color: var(--primary-text-color);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
       </style>
+
       <ha-card>
         <div id="searchContainer">
           <div id="searchTextFieldContainer">
@@ -249,48 +258,37 @@ class SearchCard extends HTMLElement {
     const friendlyName = state?.attributes?.friendly_name || entity_id;
     const stateValue = this._formatState(state);
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "entity-row-wrapper";
+    const row = document.createElement("div");
+    row.className = "entity-row";
 
-    // Icon
-    const iconArea = document.createElement("div");
-    iconArea.className = "entity-icon-area";
-    const icon = document.createElement("ha-state-icon");
-    icon.stateObj = state;
-    icon.hass = this._hass;
-    iconArea.appendChild(icon);
+    // state-badge (native HA element, 40x40, handles icon + color)
+    const badge = document.createElement("state-badge");
+    badge.dataset.entity = entity_id;
+    badge.stateObj = state;
+    badge.hass = this._hass;
 
-    // Info
+    // Entity name
     const info = document.createElement("div");
     info.className = "entity-info";
-    const name = document.createElement("div");
-    name.className = "entity-name";
-    name.textContent = friendlyName;
-    const id = document.createElement("div");
-    id.className = "entity-id";
-    id.textContent = entity_id;
-    info.appendChild(name);
-    info.appendChild(id);
+    info.textContent = friendlyName;
 
-    // State
+    // State value
     const stateEl = document.createElement("div");
     stateEl.className = "entity-state";
+    stateEl.dataset.entity = entity_id;
     stateEl.textContent = stateValue;
 
-    wrapper.appendChild(iconArea);
-    wrapper.appendChild(info);
-    wrapper.appendChild(stateEl);
+    row.appendChild(badge);
+    row.appendChild(info);
+    row.appendChild(stateEl);
 
-    wrapper.addEventListener("click", () => {
-      this._fireMoreInfo(entity_id);
-    });
+    row.addEventListener("click", () => this._fireMoreInfo(entity_id));
 
-    return wrapper;
+    return row;
   }
 
   _formatState(state) {
     if (!state) return "";
-    // Use unit of measurement if available
     const unit = state.attributes?.unit_of_measurement;
     if (unit) return `${state.state} ${unit}`;
     return state.state;
@@ -301,7 +299,7 @@ class SearchCard extends HTMLElement {
     row.className = "action-row";
 
     const iconArea = document.createElement("div");
-    iconArea.className = "action-icon-area";
+    iconArea.className = "action-icon";
     const haIcon = document.createElement("ha-icon");
     haIcon.setAttribute("icon", action.icon || "mdi:lamp");
     iconArea.appendChild(haIcon);
