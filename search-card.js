@@ -71,7 +71,7 @@ class SearchCard extends HTMLElement {
 
         /* ── Search bar area ── */
         #searchContainer {
-          padding: 16px 16px 8px 16px;
+          padding: 16px 16px 16px 16px;
         }
 
         /* Outlined search field — like HA's own search dialogs */
@@ -160,7 +160,7 @@ class SearchCard extends HTMLElement {
           display: none;
         }
         #results {
-          padding: 0 16px 16px 16px;
+          padding: 8px 16px 16px 16px;
         }
         #count:empty {
           display: none;
