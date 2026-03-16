@@ -67,29 +67,32 @@ class SearchCard extends HTMLElement {
       <style>
         :host { display: block; }
 
-        ha-card { overflow: hidden; }
+        ha-card {
+          background: transparent !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
 
         /* ── Search bar area ── */
         #searchContainer {
-          padding: 16px 16px 16px 16px;
+          padding: 0;
         }
 
-        /* Outlined search field — like HA's own search dialogs */
+        /* Search wrap als kaart — zelfde look als andere HA kaarten */
         #searchWrap {
           display: flex;
           align-items: center;
-          height: 48px;
-          border: 1px solid var(--input-outlined-idle-border-color, rgba(0,0,0,0.38));
+          height: 56px;
           border-radius: 28px;
-          padding: 0 4px 0 12px;
+          padding: 0 4px 0 16px;
           background: var(--card-background-color, #fff);
-          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+          box-shadow: var(--ha-card-box-shadow, 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12), 0 3px 1px -2px rgba(0,0,0,.2));
+          transition: box-shadow 0.15s ease;
           box-sizing: border-box;
         }
 
         #searchWrap:focus-within {
-          border-color: var(--mdc-theme-primary, #009ac7);
-          box-shadow: 0 0 0 1px var(--mdc-theme-primary, #009ac7);
+          box-shadow: 0 2px 8px 0 rgba(0,0,0,.18), 0 1px 5px 0 rgba(0,0,0,.14), 0 0 0 2px var(--mdc-theme-primary, #009ac7);
         }
 
         #searchIcon {
@@ -160,7 +163,7 @@ class SearchCard extends HTMLElement {
           display: none;
         }
         #results {
-          padding: 8px 16px 16px 16px;
+          padding: 8px 0 0 0;
         }
         #count:empty {
           display: none;
@@ -174,8 +177,8 @@ class SearchCard extends HTMLElement {
           cursor: pointer;
           border-radius: 8px;
           transition: background-color 0.12s ease;
-          margin: 0 -4px;
-          padding: 0 4px;
+          margin: 0 -8px;
+          padding: 0 8px;
         }
 
         .entity-row:hover {
@@ -217,8 +220,8 @@ class SearchCard extends HTMLElement {
           cursor: pointer;
           border-radius: 8px;
           transition: background-color 0.12s ease;
-          margin: 0 -4px;
-          padding: 0 4px;
+          margin: 0 -8px;
+          padding: 0 8px;
         }
 
         .action-row:hover {
@@ -305,13 +308,19 @@ class SearchCard extends HTMLElement {
       : "";
 
     resultsContainer.innerHTML = "";
+    if (results.length === 0 && this._activeActions.length === 0) return;
+
+    // Maak een kaart-wrapper voor de resultaten
+    const card = document.createElement("div");
+    card.className = "results-card";
+    resultsContainer.appendChild(card);
 
     for (const [action, matches] of this._activeActions) {
-      resultsContainer.appendChild(this._createActionRow(action, matches));
+      card.appendChild(this._createActionRow(action, matches));
     }
 
     for (const entity_id of results) {
-      resultsContainer.appendChild(this._createEntityRow(entity_id));
+      card.appendChild(this._createEntityRow(entity_id));
     }
   }
 
