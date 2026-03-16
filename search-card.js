@@ -55,6 +55,9 @@ class SearchCard extends HTMLElement {
   _render() {
     this.shadowRoot.innerHTML = `
       <style>
+        :host {
+          display: block;
+        }
         ha-card {
           padding-bottom: 8px;
         }
@@ -93,35 +96,96 @@ class SearchCard extends HTMLElement {
           display: block;
           margin: 4px auto 0 auto;
         }
+
+        /* Entity row — mirrors HA's own entities-card row styling */
         .entity-row-wrapper {
-          cursor: pointer;
-          display: block;
-        }
-        .entity-row-element {
-          display: block;
-          pointer-events: none;
-        }
-        .action-row {
           display: flex;
           align-items: center;
-          min-height: 52px;
-          padding: 4px 0;
+          justify-content: space-between;
+          height: 52px;
+          padding: 0 8px;
           cursor: pointer;
+          border-radius: var(--ha-card-border-radius, 4px);
+          transition: background-color 0.15s ease;
+          box-sizing: border-box;
         }
-        .action-row:hover {
-          background: rgba(0,0,0,0.04);
-          border-radius: 4px;
+        .entity-row-wrapper:hover {
+          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.04);
         }
-        .action-icon {
+        .entity-icon-area {
           width: 40px;
+          height: 40px;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: var(--paper-item-icon-color, #44739e);
           flex-shrink: 0;
+          margin-right: 8px;
+        }
+        .entity-icon-area ha-state-icon {
+          --mdc-icon-size: 24px;
+          color: var(--paper-item-icon-color, var(--state-icon-color, #44739e));
+        }
+        .entity-info {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+        .entity-name {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--primary-text-color);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.3;
+        }
+        .entity-id {
+          font-size: 12px;
+          color: var(--secondary-text-color);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.3;
+        }
+        .entity-state {
+          font-size: 14px;
+          color: var(--primary-text-color);
+          white-space: nowrap;
+          margin-left: 8px;
+          flex-shrink: 0;
+          text-align: right;
+        }
+
+        /* Action row */
+        .action-row {
+          display: flex;
+          align-items: center;
+          height: 52px;
+          padding: 0 8px;
+          cursor: pointer;
+          border-radius: var(--ha-card-border-radius, 4px);
+          transition: background-color 0.15s ease;
+          box-sizing: border-box;
+        }
+        .action-row:hover {
+          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.04);
+        }
+        .action-icon-area {
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          margin-right: 8px;
+          color: var(--paper-item-icon-color, #44739e);
+          --mdc-icon-size: 24px;
         }
         .action-name {
-          font-size: 1em;
+          font-size: 14px;
+          font-weight: 500;
           color: var(--primary-text-color);
         }
       </style>
@@ -176,20 +240,47 @@ class SearchCard extends HTMLElement {
     }
 
     for (const entity_id of results) {
-      resultsContainer.appendChild(this._createEntityRowWrapper(entity_id));
+      resultsContainer.appendChild(this._createEntityRow(entity_id));
     }
   }
 
-  _createEntityRowWrapper(entity_id) {
+  _createEntityRow(entity_id) {
+    const state = this._hass?.states[entity_id];
+    const friendlyName = state?.attributes?.friendly_name || entity_id;
+    const stateValue = this._formatState(state);
+
     const wrapper = document.createElement("div");
     wrapper.className = "entity-row-wrapper";
 
-    const row = document.createElement("hui-generic-entity-row");
-    row.className = "entity-row-element";
-    row.config = { entity: entity_id };
-    row.hass = this._hass;
+    // Icon
+    const iconArea = document.createElement("div");
+    iconArea.className = "entity-icon-area";
+    const icon = document.createElement("ha-state-icon");
+    icon.stateObj = state;
+    icon.hass = this._hass;
+    iconArea.appendChild(icon);
 
-    wrapper.appendChild(row);
+    // Info
+    const info = document.createElement("div");
+    info.className = "entity-info";
+    const name = document.createElement("div");
+    name.className = "entity-name";
+    name.textContent = friendlyName;
+    const id = document.createElement("div");
+    id.className = "entity-id";
+    id.textContent = entity_id;
+    info.appendChild(name);
+    info.appendChild(id);
+
+    // State
+    const stateEl = document.createElement("div");
+    stateEl.className = "entity-state";
+    stateEl.textContent = stateValue;
+
+    wrapper.appendChild(iconArea);
+    wrapper.appendChild(info);
+    wrapper.appendChild(stateEl);
+
     wrapper.addEventListener("click", () => {
       this._fireMoreInfo(entity_id);
     });
@@ -197,21 +288,29 @@ class SearchCard extends HTMLElement {
     return wrapper;
   }
 
+  _formatState(state) {
+    if (!state) return "";
+    // Use unit of measurement if available
+    const unit = state.attributes?.unit_of_measurement;
+    if (unit) return `${state.state} ${unit}`;
+    return state.state;
+  }
+
   _createActionRow(action, matches) {
     const row = document.createElement("div");
     row.className = "action-row";
 
-    const iconEl = document.createElement("div");
-    iconEl.className = "action-icon";
+    const iconArea = document.createElement("div");
+    iconArea.className = "action-icon-area";
     const haIcon = document.createElement("ha-icon");
     haIcon.setAttribute("icon", action.icon || "mdi:lamp");
-    iconEl.appendChild(haIcon);
+    iconArea.appendChild(haIcon);
 
     const name = document.createElement("div");
     name.className = "action-name";
     name.textContent = matchAndReplace(action.name, matches);
 
-    row.appendChild(iconEl);
+    row.appendChild(iconArea);
     row.appendChild(name);
 
     row.addEventListener("click", () => {
