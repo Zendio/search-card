@@ -33,8 +33,7 @@ class SearchCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    // Update hass on all entity rows
-    this.shadowRoot.querySelectorAll("hui-generic-entity-row, hui-entity-row, state-card-content").forEach((row) => {
+    this.shadowRoot.querySelectorAll(".entity-row-element").forEach((row) => {
       row.hass = hass;
     });
   }
@@ -57,20 +56,19 @@ class SearchCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         ha-card {
-          padding: 8px 0 16px 0;
+          padding-bottom: 8px;
         }
         #searchContainer {
           width: 90%;
           display: block;
           margin: 0 auto;
+          padding: 8px 0 4px 0;
         }
         #searchTextFieldContainer {
           display: flex;
           align-items: center;
-          padding: 5px 0;
-          gap: 8px;
         }
-        #searchText {
+        ha-textfield {
           flex-grow: 1;
         }
         #clearBtn {
@@ -78,96 +76,53 @@ class SearchCard extends HTMLElement {
           color: var(--secondary-text-color);
           background: none;
           border: none;
-          padding: 4px;
+          padding: 0;
+          margin-left: 4px;
           display: flex;
           align-items: center;
-        }
-        #clearBtn:hover {
-          color: var(--primary-text-color);
         }
         #count {
           text-align: right;
           font-style: italic;
           font-size: 0.85em;
           color: var(--secondary-text-color);
-          padding: 2px 0 4px 0;
+          padding: 2px 0;
         }
         #results {
           width: 90%;
           display: block;
-          padding-bottom: 8px;
-          margin: 8px auto 0 auto;
+          margin: 4px auto 0 auto;
         }
-        .entity-row {
-          display: flex;
-          align-items: center;
-          padding: 8px 0;
+        .entity-row-wrapper {
           cursor: pointer;
-          border-radius: 4px;
-          transition: background-color 0.1s;
+          display: block;
         }
-        .entity-row:hover {
-          background-color: var(--state-color, rgba(var(--rgb-primary-text-color, 0,0,0), 0.04));
-        }
-        .entity-icon {
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-right: 8px;
-          flex-shrink: 0;
-        }
-        .entity-info {
-          flex-grow: 1;
-          overflow: hidden;
-        }
-        .entity-name {
-          font-size: 1em;
-          color: var(--primary-text-color);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .entity-id {
-          font-size: 0.8em;
-          color: var(--secondary-text-color);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .entity-state {
-          font-size: 0.9em;
-          color: var(--secondary-text-color);
-          white-space: nowrap;
-          margin-left: 8px;
-          flex-shrink: 0;
+        .entity-row-element {
+          display: block;
+          pointer-events: none;
         }
         .action-row {
           display: flex;
           align-items: center;
-          padding: 8px 0;
+          min-height: 52px;
+          padding: 4px 0;
           cursor: pointer;
-          border-radius: 4px;
         }
         .action-row:hover {
-          background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.04);
+          background: rgba(0,0,0,0.04);
+          border-radius: 4px;
         }
         .action-icon {
           width: 40px;
-          height: 40px;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-right: 8px;
+          color: var(--paper-item-icon-color, #44739e);
           flex-shrink: 0;
         }
         .action-name {
           font-size: 1em;
           color: var(--primary-text-color);
-        }
-        ha-textfield {
-          width: 100%;
         }
       </style>
       <ha-card>
@@ -179,9 +134,9 @@ class SearchCard extends HTMLElement {
               autocomplete="off"
               label="${this._searchText}"
             ></ha-textfield>
-            <button id="clearBtn" title="Clear">
+            <ha-icon-button id="clearBtn" title="Clear">
               <ha-icon icon="mdi:close"></ha-icon>
-            </button>
+            </ha-icon-button>
           </div>
           <div id="count"></div>
         </div>
@@ -189,16 +144,14 @@ class SearchCard extends HTMLElement {
       </ha-card>
     `;
 
-    const input = this.shadowRoot.getElementById("searchText");
-    input.addEventListener("input", (e) => {
+    this.shadowRoot.getElementById("searchText").addEventListener("input", (e) => {
       this._searchValue = e.target.value;
       this._debouncedSearch(this._searchValue);
     });
 
-    const clearBtn = this.shadowRoot.getElementById("clearBtn");
-    clearBtn.addEventListener("click", () => {
+    this.shadowRoot.getElementById("clearBtn").addEventListener("click", () => {
       this._searchValue = "";
-      input.value = "";
+      this.shadowRoot.getElementById("searchText").value = "";
       this._results = [];
       this._activeActions = [];
       this._renderResults();
@@ -212,63 +165,36 @@ class SearchCard extends HTMLElement {
 
     const results = this._results.slice(0, this._maxResults).sort();
 
-    if (results.length > 0) {
-      countContainer.textContent = `Showing ${results.length} of ${this._results.length} results`;
-    } else {
-      countContainer.textContent = "";
-    }
+    countContainer.textContent = results.length > 0
+      ? `Showing ${results.length} of ${this._results.length} results`
+      : "";
 
     resultsContainer.innerHTML = "";
 
-    // Render action rows
     for (const [action, matches] of this._activeActions) {
-      const row = this._createActionRow(action, matches);
-      resultsContainer.appendChild(row);
+      resultsContainer.appendChild(this._createActionRow(action, matches));
     }
 
-    // Render entity rows
     for (const entity_id of results) {
-      const row = this._createEntityRow(entity_id);
-      resultsContainer.appendChild(row);
+      resultsContainer.appendChild(this._createEntityRowWrapper(entity_id));
     }
   }
 
-  _createEntityRow(entity_id) {
-    const state = this._hass?.states[entity_id];
-    const friendlyName = state?.attributes?.friendly_name || entity_id;
-    const stateValue = state?.state || "";
-    const domain = entity_id.split(".")[0];
+  _createEntityRowWrapper(entity_id) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "entity-row-wrapper";
 
-    const row = document.createElement("div");
-    row.className = "entity-row";
+    const row = document.createElement("hui-generic-entity-row");
+    row.className = "entity-row-element";
+    row.config = { entity: entity_id };
+    row.hass = this._hass;
 
-    const iconEl = document.createElement("div");
-    iconEl.className = "entity-icon";
-    const haIcon = document.createElement("ha-state-icon");
-    haIcon.stateObj = state;
-    haIcon.hass = this._hass;
-    iconEl.appendChild(haIcon);
-
-    const info = document.createElement("div");
-    info.className = "entity-info";
-    info.innerHTML = `
-      <div class="entity-name">${friendlyName}</div>
-      <div class="entity-id">${entity_id}</div>
-    `;
-
-    const stateEl = document.createElement("div");
-    stateEl.className = "entity-state";
-    stateEl.textContent = stateValue;
-
-    row.appendChild(iconEl);
-    row.appendChild(info);
-    row.appendChild(stateEl);
-
-    row.addEventListener("click", () => {
+    wrapper.appendChild(row);
+    wrapper.addEventListener("click", () => {
       this._fireMoreInfo(entity_id);
     });
 
-    return row;
+    return wrapper;
   }
 
   _createActionRow(action, matches) {
@@ -301,12 +227,11 @@ class SearchCard extends HTMLElement {
   }
 
   _fireMoreInfo(entityId) {
-    const event = new CustomEvent("hass-more-info", {
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
       composed: true,
       bubbles: true,
       detail: { entityId },
-    });
-    this.dispatchEvent(event);
+    }));
   }
 
   _performSearch(searchText) {
