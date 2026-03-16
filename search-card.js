@@ -71,7 +71,7 @@ class SearchCard extends HTMLElement {
 
         /* ── Search bar area ── */
         #searchContainer {
-          padding: 16px 16px 0 16px;
+          padding: 16px 16px 8px 16px;
         }
 
         /* Outlined search field — like HA's own search dialogs */
@@ -152,13 +152,18 @@ class SearchCard extends HTMLElement {
           font-style: italic;
           font-size: 12px;
           color: var(--secondary-text-color);
-          padding: 6px 0 0 0;
-          min-height: 20px;
+          padding: 4px 0 0 0;
         }
 
         /* ── Results ── */
+        #results:empty {
+          display: none;
+        }
         #results {
-          padding: 4px 16px 16px 16px;
+          padding: 0 16px 16px 16px;
+        }
+        #count:empty {
+          display: none;
         }
 
         /* ── Entity row: exact native HA sizing ── */
