@@ -33,7 +33,6 @@ class SearchCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    // Update state icons live
     this.shadowRoot.querySelectorAll("state-badge").forEach((badge) => {
       const entityId = badge.dataset.entity;
       if (entityId && hass.states[entityId]) {
@@ -41,7 +40,6 @@ class SearchCard extends HTMLElement {
         badge.hass = hass;
       }
     });
-    // Update state values live
     this.shadowRoot.querySelectorAll(".entity-state").forEach((el) => {
       const entityId = el.dataset.entity;
       if (entityId && hass.states[entityId]) {
@@ -53,7 +51,7 @@ class SearchCard extends HTMLElement {
   setConfig(config) {
     this._config = config;
     this._maxResults = config.max_results || 10;
-    this._searchText = config.search_text || "Type to search...";
+    this._searchText = config.search_text || "Search entities…";
     this._actions = BUILTIN_ACTIONS.concat(config.actions || []);
     this._includedDomains = config.included_domains;
     this._excludedDomains = config.excluded_domains || [];
@@ -67,35 +65,86 @@ class SearchCard extends HTMLElement {
   _render() {
     this.shadowRoot.innerHTML = `
       <style>
-        :host {
-          display: block;
-        }
+        :host { display: block; }
 
-        /* ── Card shell ── */
-        ha-card {
-          overflow: hidden;
-        }
+        ha-card { overflow: hidden; }
 
-        /* ── Search area: native card-content padding ── */
+        /* ── Search bar area ── */
         #searchContainer {
-          padding: 16px 16px 8px 16px;
+          padding: 16px 16px 0 16px;
         }
 
-        #searchTextFieldContainer {
+        /* Outlined search field — like HA's own search dialogs */
+        #searchWrap {
           display: flex;
           align-items: center;
-          gap: 4px;
+          height: 48px;
+          border: 1px solid var(--input-outlined-idle-border-color, rgba(0,0,0,0.38));
+          border-radius: 28px;
+          padding: 0 4px 0 12px;
+          background: var(--card-background-color, #fff);
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+          box-sizing: border-box;
         }
 
-        ha-textfield {
-          flex-grow: 1;
+        #searchWrap:focus-within {
+          border-color: var(--mdc-theme-primary, #009ac7);
+          box-shadow: 0 0 0 1px var(--mdc-theme-primary, #009ac7);
+        }
+
+        #searchIcon {
+          flex-shrink: 0;
+          color: var(--input-label-ink-color, rgba(0,0,0,0.6));
+          --mdc-icon-size: 20px;
+          margin-right: 8px;
+          display: flex;
+          align-items: center;
+        }
+
+        #searchInput {
+          flex: 1;
+          border: none;
+          outline: none;
+          background: transparent;
+          font-family: inherit;
+          font-size: 16px;
+          line-height: 24px;
+          color: var(--primary-text-color, rgba(0,0,0,0.87));
+          caret-color: var(--mdc-theme-primary, #009ac7);
+          min-width: 0;
+        }
+
+        #searchInput::placeholder {
+          color: var(--input-label-ink-color, rgba(0,0,0,0.6));
         }
 
         #clearBtn {
           flex-shrink: 0;
-          color: var(--secondary-text-color);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.15s ease;
+          color: var(--input-label-ink-color, rgba(0,0,0,0.6));
           --mdc-icon-button-size: 36px;
-          --mdc-icon-size: 20px;
+          --mdc-icon-size: 18px;
+          cursor: pointer;
+          background: none;
+          border: none;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+        }
+
+        #clearBtn.visible {
+          opacity: 1;
+          pointer-events: auto;
+        }
+
+        #clearBtn:hover {
+          background: rgba(var(--rgb-primary-text-color, 0,0,0), 0.06);
         }
 
         #count {
@@ -103,24 +152,23 @@ class SearchCard extends HTMLElement {
           font-style: italic;
           font-size: 12px;
           color: var(--secondary-text-color);
-          padding: 4px 0 0 0;
-          min-height: 18px;
+          padding: 6px 0 0 0;
+          min-height: 20px;
         }
 
-        /* ── Results area: mirrors card-content 16px padding ── */
+        /* ── Results ── */
         #results {
-          padding: 0 16px 16px 16px;
+          padding: 4px 16px 16px 16px;
         }
 
-        /* ── Entity row: exact match to native hui-*-entity-row ── */
+        /* ── Entity row: exact native HA sizing ── */
         .entity-row {
           display: flex;
           align-items: center;
           height: 40px;
           cursor: pointer;
-          border-radius: var(--ha-card-border-radius, 12px);
+          border-radius: 8px;
           transition: background-color 0.12s ease;
-          /* negative side margin so hover bg bleeds to edges, then compensate */
           margin: 0 -4px;
           padding: 0 4px;
         }
@@ -129,14 +177,12 @@ class SearchCard extends HTMLElement {
           background-color: rgba(var(--rgb-primary-text-color, 0,0,0), 0.05);
         }
 
-        /* state-badge is 40x40, no extra margin needed */
         .entity-row state-badge {
           flex-shrink: 0;
           width: 40px;
           height: 40px;
         }
 
-        /* Info block: padding-left 16px padding-right 8px, exact native values */
         .entity-info {
           flex: 1 1 auto;
           min-width: 0;
@@ -149,7 +195,6 @@ class SearchCard extends HTMLElement {
           color: var(--primary-text-color);
         }
 
-        /* State value: right-aligned, same font as native */
         .entity-state {
           flex-shrink: 0;
           font-size: 14px;
@@ -165,7 +210,7 @@ class SearchCard extends HTMLElement {
           align-items: center;
           height: 40px;
           cursor: pointer;
-          border-radius: var(--ha-card-border-radius, 12px);
+          border-radius: 8px;
           transition: background-color 0.12s ease;
           margin: 0 -4px;
           padding: 0 4px;
@@ -182,7 +227,7 @@ class SearchCard extends HTMLElement {
           display: flex;
           align-items: center;
           justify-content: center;
-          color: var(--paper-item-icon-color, var(--state-icon-color, #44739e));
+          color: var(--paper-item-icon-color, #44739e);
           --mdc-icon-size: 24px;
         }
 
@@ -200,16 +245,22 @@ class SearchCard extends HTMLElement {
 
       <ha-card>
         <div id="searchContainer">
-          <div id="searchTextFieldContainer">
-            <ha-textfield
-              id="searchText"
+          <div id="searchWrap">
+            <span id="searchIcon">
+              <ha-icon icon="mdi:magnify"></ha-icon>
+            </span>
+            <input
+              id="searchInput"
               type="text"
               autocomplete="off"
-              label="${this._searchText}"
-            ></ha-textfield>
-            <ha-icon-button id="clearBtn" title="Clear">
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="${this._searchText}"
+            />
+            <button id="clearBtn" title="Clear" aria-label="Clear">
               <ha-icon icon="mdi:close"></ha-icon>
-            </ha-icon-button>
+            </button>
           </div>
           <div id="count"></div>
         </div>
@@ -217,17 +268,23 @@ class SearchCard extends HTMLElement {
       </ha-card>
     `;
 
-    this.shadowRoot.getElementById("searchText").addEventListener("input", (e) => {
+    const input = this.shadowRoot.getElementById("searchInput");
+    const clearBtn = this.shadowRoot.getElementById("clearBtn");
+
+    input.addEventListener("input", (e) => {
       this._searchValue = e.target.value;
+      clearBtn.classList.toggle("visible", this._searchValue.length > 0);
       this._debouncedSearch(this._searchValue);
     });
 
-    this.shadowRoot.getElementById("clearBtn").addEventListener("click", () => {
+    clearBtn.addEventListener("click", () => {
       this._searchValue = "";
-      this.shadowRoot.getElementById("searchText").value = "";
+      input.value = "";
+      clearBtn.classList.remove("visible");
       this._results = [];
       this._activeActions = [];
       this._renderResults();
+      input.focus();
     });
   }
 
@@ -256,32 +313,27 @@ class SearchCard extends HTMLElement {
   _createEntityRow(entity_id) {
     const state = this._hass?.states[entity_id];
     const friendlyName = state?.attributes?.friendly_name || entity_id;
-    const stateValue = this._formatState(state);
 
     const row = document.createElement("div");
     row.className = "entity-row";
 
-    // state-badge (native HA element, 40x40, handles icon + color)
     const badge = document.createElement("state-badge");
     badge.dataset.entity = entity_id;
     badge.stateObj = state;
     badge.hass = this._hass;
 
-    // Entity name
     const info = document.createElement("div");
     info.className = "entity-info";
     info.textContent = friendlyName;
 
-    // State value
     const stateEl = document.createElement("div");
     stateEl.className = "entity-state";
     stateEl.dataset.entity = entity_id;
-    stateEl.textContent = stateValue;
+    stateEl.textContent = this._formatState(state);
 
     row.appendChild(badge);
     row.appendChild(info);
     row.appendChild(stateEl);
-
     row.addEventListener("click", () => this._fireMoreInfo(entity_id));
 
     return row;
@@ -290,8 +342,7 @@ class SearchCard extends HTMLElement {
   _formatState(state) {
     if (!state) return "";
     const unit = state.attributes?.unit_of_measurement;
-    if (unit) return `${state.state} ${unit}`;
-    return state.state;
+    return unit ? `${state.state} ${unit}` : state.state;
   }
 
   _createActionRow(action, matches) {
@@ -310,7 +361,6 @@ class SearchCard extends HTMLElement {
 
     row.appendChild(iconArea);
     row.appendChild(name);
-
     row.addEventListener("click", () => {
       const service_data = {};
       for (var key in action.service_data) {
@@ -342,7 +392,6 @@ class SearchCard extends HTMLElement {
     try {
       const searchRegex = new RegExp(searchText, "i");
       const newResults = [];
-
       for (const entity_id in this._hass.states) {
         if (
           (entity_id.search(searchRegex) >= 0 ||
@@ -354,7 +403,6 @@ class SearchCard extends HTMLElement {
           newResults.push(entity_id);
         }
       }
-
       this._results = newResults;
       this._activeActions = this._getActivatedActions(searchText);
     } catch (err) {
@@ -371,9 +419,7 @@ class SearchCard extends HTMLElement {
     for (const action of this._actions) {
       if (this._serviceExists(action.service)) {
         const matches = searchText.match(action.matches);
-        if (matches != null) {
-          active.push([action, matches]);
-        }
+        if (matches != null) active.push([action, matches]);
       }
     }
     return active;
