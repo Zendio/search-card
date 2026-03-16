@@ -270,7 +270,6 @@ class SearchCard extends HTMLElement {
               <ha-icon icon="mdi:close"></ha-icon>
             </button>
           </div>
-          <div id="count"></div>
         </div>
         <div id="results"></div>
       </ha-card>
@@ -298,14 +297,9 @@ class SearchCard extends HTMLElement {
 
   _renderResults() {
     const resultsContainer = this.shadowRoot.getElementById("results");
-    const countContainer = this.shadowRoot.getElementById("count");
     if (!resultsContainer) return;
 
     const results = this._results.slice(0, this._maxResults).sort();
-
-    countContainer.textContent = results.length > 0
-      ? `Showing ${results.length} of ${this._results.length} results`
-      : "";
 
     resultsContainer.innerHTML = "";
     if (results.length === 0 && this._activeActions.length === 0) return;
@@ -313,6 +307,15 @@ class SearchCard extends HTMLElement {
     // Maak een kaart-wrapper voor de resultaten
     const card = document.createElement("div");
     card.className = "results-card";
+
+    // Count bovenaan in de kaart
+    const count = document.createElement("div");
+    count.id = "count";
+    count.textContent = results.length > 0
+      ? `Showing ${results.length} of ${this._results.length} results`
+      : "";
+    card.appendChild(count);
+
     resultsContainer.appendChild(card);
 
     for (const [action, matches] of this._activeActions) {
