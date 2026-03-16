@@ -56,19 +56,16 @@ class SearchCard extends HTMLElement {
       <style>
         :host { display: block; }
 
-        /* Transparante ha-card wrapper */
+        /*
+         * Gebruik ha-card als de echte kaart shell — dan erft het automatisch
+         * alle theme variabelen: --ha-card-background, --ha-card-border-radius,
+         * --ha-card-border-color, --ha-card-border-width, --ha-card-box-shadow.
+         * Themes die deze variabelen zetten (bijv. Mushroom, Google Home)
+         * worden zo automatisch correct overgenomen.
+         */
         ha-card {
-          background: transparent !important;
-          box-shadow: none !important;
-          border: none !important;
-        }
-
-        /* ── Eén kaart die groeit als er resultaten zijn ── */
-        #card {
-          background: var(--card-background-color, #fff);
-          border-radius: 12px;
-          border: 1px solid rgba(0, 0, 0, 0.12);
           overflow: hidden;
+          /* Geen extra overrides — laat het theme zijn gang gaan */
         }
 
         /* ── Zoekbalk ── */
@@ -80,14 +77,14 @@ class SearchCard extends HTMLElement {
           box-sizing: border-box;
         }
 
-        /* Scheidingslijn tussen zoekbalk en resultaten */
+        /* Scheidingslijn tussen zoekbalk en resultaten — gebruikt theme divider kleur */
         #card.has-results #searchWrap {
-          border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+          border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
         }
 
         #searchIcon {
           flex-shrink: 0;
-          color: var(--secondary-text-color, rgba(0,0,0,0.54));
+          color: var(--secondary-text-color);
           --mdc-icon-size: 20px;
           display: flex;
           align-items: center;
@@ -101,13 +98,13 @@ class SearchCard extends HTMLElement {
           background: transparent;
           font-family: inherit;
           font-size: 16px;
-          color: var(--primary-text-color, rgba(0,0,0,0.87));
-          caret-color: var(--mdc-theme-primary, #009ac7);
+          color: var(--primary-text-color);
+          caret-color: var(--mdc-theme-primary);
           min-width: 0;
         }
 
         #searchInput::placeholder {
-          color: var(--secondary-text-color, rgba(0,0,0,0.54));
+          color: var(--secondary-text-color);
         }
 
         #clearBtn {
@@ -125,7 +122,7 @@ class SearchCard extends HTMLElement {
           width: 36px;
           height: 36px;
           border-radius: 50%;
-          color: var(--secondary-text-color, rgba(0,0,0,0.54));
+          color: var(--secondary-text-color);
           --mdc-icon-size: 18px;
         }
 
@@ -135,7 +132,7 @@ class SearchCard extends HTMLElement {
         }
 
         #clearBtn:hover {
-          background: rgba(0, 0, 0, 0.06);
+          background-color: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.06);
         }
 
         /* ── Resultaten ── */
@@ -162,14 +159,14 @@ class SearchCard extends HTMLElement {
           align-items: center;
           height: 40px;
           cursor: pointer;
-          border-radius: 8px;
+          border-radius: calc(var(--ha-card-border-radius, 12px) / 2);
           transition: background-color 0.12s ease;
           margin: 0 -8px;
           padding: 0 8px;
         }
 
         .entity-row:hover {
-          background-color: rgba(0, 0, 0, 0.05);
+          background-color: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.05);
         }
 
         .entity-row state-badge {
@@ -205,14 +202,14 @@ class SearchCard extends HTMLElement {
           align-items: center;
           height: 40px;
           cursor: pointer;
-          border-radius: 8px;
+          border-radius: calc(var(--ha-card-border-radius, 12px) / 2);
           transition: background-color 0.12s ease;
           margin: 0 -8px;
           padding: 0 8px;
         }
 
         .action-row:hover {
-          background-color: rgba(0, 0, 0, 0.05);
+          background-color: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.05);
         }
 
         .action-icon {
@@ -222,7 +219,7 @@ class SearchCard extends HTMLElement {
           display: flex;
           align-items: center;
           justify-content: center;
-          color: var(--paper-item-icon-color, #44739e);
+          color: var(--paper-item-icon-color, var(--state-icon-color, #44739e));
           --mdc-icon-size: 24px;
         }
 
@@ -238,27 +235,25 @@ class SearchCard extends HTMLElement {
         }
       </style>
 
-      <ha-card>
-        <div id="card">
-          <div id="searchWrap">
-            <span id="searchIcon"><ha-icon icon="mdi:magnify"></ha-icon></span>
-            <input
-              id="searchInput"
-              type="text"
-              autocomplete="off"
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-              placeholder="${this._searchPlaceholder}"
-            />
-            <button id="clearBtn" title="Clear" aria-label="Clear">
-              <ha-icon icon="mdi:close"></ha-icon>
-            </button>
-          </div>
-          <div id="resultsWrap">
-            <div id="count"></div>
-            <div id="rows"></div>
-          </div>
+      <ha-card id="card">
+        <div id="searchWrap">
+          <span id="searchIcon"><ha-icon icon="mdi:magnify"></ha-icon></span>
+          <input
+            id="searchInput"
+            type="text"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="${this._searchPlaceholder}"
+          />
+          <button id="clearBtn" title="Clear" aria-label="Clear">
+            <ha-icon icon="mdi:close"></ha-icon>
+          </button>
+        </div>
+        <div id="resultsWrap">
+          <div id="count"></div>
+          <div id="rows"></div>
         </div>
       </ha-card>
     `;
