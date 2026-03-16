@@ -116,7 +116,14 @@ customElements.whenDefined("card-tools").then(() => {
 
     _createResultRow(entity_id) {
       var row = ct.createEntityRow({ entity: entity_id });
-      row.addEventListener("click", () => ct.moreInfo(entity_id));
+      row.addEventListener("click", () => {
+        const event = new CustomEvent("hass-more-info", {
+          composed: true,
+          bubbles: true,
+          detail: { entityId: entity_id },
+        });
+        this.dispatchEvent(event);
+      });
       row.hass = this.hass;
       return row;
     }
