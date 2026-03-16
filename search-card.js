@@ -56,37 +56,42 @@ class SearchCard extends HTMLElement {
       <style>
         :host { display: block; }
 
-        /* Transparante ha-card wrapper — geen witte rechthoek */
+        /* Transparante ha-card wrapper */
         ha-card {
           background: transparent !important;
           box-shadow: none !important;
           border: none !important;
         }
 
-        /* ── Zoekbalk: pill-shaped kaart ── */
+        /* ── Eén kaart die groeit als er resultaten zijn ── */
+        #card {
+          background: var(--card-background-color, #fff);
+          border-radius: 12px;
+          border: 1px solid rgba(0, 0, 0, 0.12);
+          overflow: hidden;
+        }
+
+        /* ── Zoekbalk ── */
         #searchWrap {
           display: flex;
           align-items: center;
           height: 56px;
-          border-radius: 28px;
           padding: 0 8px 0 16px;
-          background: var(--card-background-color, #fff);
-          box-shadow: 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12), 0 3px 1px -2px rgba(0,0,0,.2);
-          transition: box-shadow 0.2s ease;
           box-sizing: border-box;
         }
 
-        #searchWrap:focus-within {
-          box-shadow: 0 2px 8px 0 rgba(0,0,0,.18), 0 0 0 2px var(--mdc-theme-primary, #009ac7);
+        /* Scheidingslijn tussen zoekbalk en resultaten */
+        #card.has-results #searchWrap {
+          border-bottom: 1px solid rgba(0, 0, 0, 0.08);
         }
 
         #searchIcon {
           flex-shrink: 0;
           color: var(--secondary-text-color, rgba(0,0,0,0.54));
-          --mdc-icon-size: 22px;
+          --mdc-icon-size: 20px;
           display: flex;
           align-items: center;
-          margin-right: 10px;
+          margin-right: 12px;
         }
 
         #searchInput {
@@ -130,21 +135,16 @@ class SearchCard extends HTMLElement {
         }
 
         #clearBtn:hover {
-          background: rgba(0,0,0,0.06);
+          background: rgba(0, 0, 0, 0.06);
         }
 
-        /* ── Resultatenkaart ── */
-        #resultsCard {
+        /* ── Resultaten ── */
+        #resultsWrap {
           display: none;
-          margin-top: 8px;
-          background: var(--card-background-color, #fff);
-          border-radius: 12px;
-          box-shadow: 0 2px 2px 0 rgba(0,0,0,.14), 0 1px 5px 0 rgba(0,0,0,.12), 0 3px 1px -2px rgba(0,0,0,.2);
-          overflow: hidden;
           padding: 8px 16px 8px 16px;
         }
 
-        #resultsCard.visible {
+        #resultsWrap.visible {
           display: block;
         }
 
@@ -153,10 +153,10 @@ class SearchCard extends HTMLElement {
           font-style: italic;
           font-size: 12px;
           color: var(--secondary-text-color);
-          padding: 2px 0 6px 0;
+          padding: 0 0 4px 0;
         }
 
-        /* ── Entity row: exact native HA maten ── */
+        /* ── Entity row: exacte native HA maten ── */
         .entity-row {
           display: flex;
           align-items: center;
@@ -169,7 +169,7 @@ class SearchCard extends HTMLElement {
         }
 
         .entity-row:hover {
-          background-color: rgba(0,0,0,0.05);
+          background-color: rgba(0, 0, 0, 0.05);
         }
 
         .entity-row state-badge {
@@ -212,7 +212,7 @@ class SearchCard extends HTMLElement {
         }
 
         .action-row:hover {
-          background-color: rgba(0,0,0,0.05);
+          background-color: rgba(0, 0, 0, 0.05);
         }
 
         .action-icon {
@@ -239,25 +239,26 @@ class SearchCard extends HTMLElement {
       </style>
 
       <ha-card>
-        <div id="searchWrap">
-          <span id="searchIcon"><ha-icon icon="mdi:magnify"></ha-icon></span>
-          <input
-            id="searchInput"
-            type="text"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck="false"
-            placeholder="${this._searchPlaceholder}"
-          />
-          <button id="clearBtn" title="Clear" aria-label="Clear">
-            <ha-icon icon="mdi:close"></ha-icon>
-          </button>
-        </div>
-
-        <div id="resultsCard">
-          <div id="count"></div>
-          <div id="rows"></div>
+        <div id="card">
+          <div id="searchWrap">
+            <span id="searchIcon"><ha-icon icon="mdi:magnify"></ha-icon></span>
+            <input
+              id="searchInput"
+              type="text"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="${this._searchPlaceholder}"
+            />
+            <button id="clearBtn" title="Clear" aria-label="Clear">
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div id="resultsWrap">
+            <div id="count"></div>
+            <div id="rows"></div>
+          </div>
         </div>
       </ha-card>
     `;
@@ -283,15 +284,17 @@ class SearchCard extends HTMLElement {
   }
 
   _renderResults() {
-    const resultsCard = this.shadowRoot.getElementById("resultsCard");
+    const card = this.shadowRoot.getElementById("card");
+    const resultsWrap = this.shadowRoot.getElementById("resultsWrap");
     const countEl = this.shadowRoot.getElementById("count");
     const rowsEl = this.shadowRoot.getElementById("rows");
-    if (!resultsCard) return;
+    if (!resultsWrap) return;
 
     const results = this._results.slice(0, this._maxResults).sort();
     const hasContent = results.length > 0 || this._activeActions.length > 0;
 
-    resultsCard.classList.toggle("visible", hasContent);
+    resultsWrap.classList.toggle("visible", hasContent);
+    card.classList.toggle("has-results", hasContent);
     rowsEl.innerHTML = "";
 
     if (!hasContent) { countEl.textContent = ""; return; }
