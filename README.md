@@ -16,7 +16,6 @@ A Lovelace card for Home Assistant that enables quick entity searching with cust
 ### Prerequisites
 
 - Home Assistant
-- [card-tools](https://github.com/thomasloven/lovelace-card-tools)
 
 ### Option 1: HACS (Recommended)
 
