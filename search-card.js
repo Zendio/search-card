@@ -22,27 +22,22 @@ class SearchCard extends HTMLElement {
       return;
     }
 
-    this.shadowRoot.querySelectorAll("state-badge").forEach((badge) => {
-      const id = badge.dataset.entity;
-      if (id && hass.states[id]) {
-        badge.stateObj = hass.states[id];
-        badge.hass = hass;
-      }
-    });
-    this.shadowRoot.querySelectorAll(".entity-state").forEach((el) => {
-      const id = el.dataset.entity;
-      if (id && hass.states[id]) {
-        el.textContent = this._formatState(hass.states[id]);
-      }
-    });
     this.shadowRoot.querySelectorAll(".entity-row").forEach((row) => {
       const id = row.dataset.entity;
-      if (id && hass.states[id]) {
-        row.setAttribute(
-          "aria-label",
-          `${this._getEntityName(hass.states[id], id)}: ${this._formatState(hass.states[id])}`,
-        );
-      }
+      const state = hass.states[id];
+      if (!id || !state) return;
+
+      const formattedState = this._formatState(state);
+      const badge = row.firstElementChild;
+      const stateEl = row.lastElementChild;
+
+      badge.stateObj = state;
+      badge.hass = hass;
+      stateEl.textContent = formattedState;
+      row.setAttribute(
+        "aria-label",
+        `${this._getEntityName(state, id)}: ${formattedState}`,
+      );
     });
   }
 
@@ -342,6 +337,7 @@ class SearchCard extends HTMLElement {
   _createEntityRow(entity_id) {
     const state = this._hass?.states[entity_id];
     const friendlyName = this._getEntityName(state, entity_id);
+    const formattedState = this._formatState(state);
 
     const row = document.createElement("button");
     row.className = "entity-row";
@@ -349,23 +345,20 @@ class SearchCard extends HTMLElement {
     row.dataset.entity = entity_id;
     row.setAttribute(
       "aria-label",
-      `${friendlyName}: ${this._formatState(state)}`,
+      `${friendlyName}: ${formattedState}`,
     );
 
     const badge = document.createElement("state-badge");
-    badge.dataset.entity = entity_id;
     badge.stateObj = state;
     badge.hass = this._hass;
 
     const info = document.createElement("div");
     info.className = "entity-info";
-    info.dataset.entity = entity_id;
     info.textContent = friendlyName;
 
     const stateEl = document.createElement("div");
     stateEl.className = "entity-state";
-    stateEl.dataset.entity = entity_id;
-    stateEl.textContent = this._formatState(state);
+    stateEl.textContent = formattedState;
 
     row.appendChild(badge);
     row.appendChild(info);
