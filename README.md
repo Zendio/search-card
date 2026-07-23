@@ -1,51 +1,49 @@
 # Search Card
 
-A Lovelace card for Home Assistant that enables quick entity searching with customizable actions.
-
-![Demo of card](images/demo.gif)
+A lightweight Lovelace card for Home Assistant that lets you quickly find
+entities and open their more-info dialogs.
 
 ## Features
 
-- 🔍 Quick entity search within the Home Assistant frontend
-- ⚡ Custom actions with regex-based matching
-- 🎯 Domain filtering (include/exclude specific domains)
-- 📋 Configurable result limits and placeholder text
+- 🔍 Case-insensitive, literal search by entity ID or friendly name
+- 🎯 Optional domain filtering with include and exclude lists
+- 📋 Configurable result limit and search placeholder
+- 🔤 Locale-aware sorting by friendly name
+- 🏷️ Native Home Assistant entity badges and localized state formatting
+- 🔄 Live state updates and automatic handling of added, removed, or renamed
+  entities
+- ⌨️ Keyboard-accessible result and clear buttons
 
 ## Installation
 
 ### Prerequisites
 
-- Home Assistant
+- Home Assistant with a Lovelace dashboard
 
-### Option 1: HACS (Recommended)
+No additional custom cards or `card-tools` installation is required.
 
-1. Search for "Search Card" in the HACS store
-2. Install and follow the HACS prompts
+### Manual installation
 
-### Option 2: Manual Install
+1. Copy `search-card.js` to:
 
-1. Download `search-card.js`
-2. Copy it to `config/www/search-card/` (create directory if needed)
-3. Add to `ui-lovelace.yaml`:
+   ```text
+   config/www/search-card/search-card.js
+   ```
 
-```yaml
-resources:
-  - url: /local/search-card/search-card.js?v=0
-    type: module
-```
+2. Add the JavaScript file as a Lovelace resource:
 
-### Option 3: Git Install
+   ```yaml
+   resources:
+     - url: /local/search-card/search-card.js?v=1
+       type: module
+   ```
 
-```bash
-# Clone into your www directory
-git clone https://github.com/postlund/search-card.git
-```
-
-Then add the same resource reference as in Manual Install.
+3. Reload the dashboard. When replacing an existing version, increment the
+   `v` query parameter or perform a hard refresh to bypass the browser cache.
 
 ## Configuration
 
-### Basic Example
+### Basic example
 
 ```yaml
 type: custom:search-card
@@ -55,38 +53,24 @@ excluded_domains:
   - automation
 ```
 
-### Available Options
+### Available options
 
-| Name             | Type     | Default             | Description                                 |
-| ---------------- | -------- | ------------------- | ------------------------------------------- |
-| max_results      | integer  | 10                  | Maximum number of search results to display |
-| search_text      | string   | "Type to search..." | Custom placeholder text                     |
-| actions          | object   | optional            | Custom action definitions                   |
-| included_domains | string[] | optional            | Only show entities from these domains\*     |
-| excluded_domains | string[] | optional            | Hide entities from these domains\*          |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `max_results` | integer | `10` | Maximum number of entity results to display. Must be zero or greater. |
+| `search_text` | string | `"Search entities…"` | Placeholder and accessible label for the search field. |
+| `included_domains` | string[] | all domains | Only include entities from these domains. |
+| `excluded_domains` | string[] | none | Exclude entities from these domains. |
 
-\*Note: `included_domains` and `excluded_domains` cannot be used together
+`included_domains` and `excluded_domains` may be used together. When both are
+configured, an entity must be in the include list and not in the exclude list.
 
-### Domain Filtering
+Search text is treated as literal text, not as a regular expression. Leading
+and trailing whitespace is ignored.
 
-The card supports filtering entities by their domains using either `included_domains` or `excluded_domains`.
+## Domain filtering
 
-#### Common Home Assistant Domains
-
-- `light` - Light entities
-- `switch` - Switch entities
-- `sensor` - Sensor entities
-- `binary_sensor` - Binary sensor entities
-- `climate` - Climate control entities
-- `media_player` - Media player entities
-- `automation` - Automation entities
-- `script` - Script entities
-- `camera` - Camera entities
-- `cover` - Cover/blind/garage door entities
-
-#### Examples
-
-Include only lights and switches:
+### Include only selected domains
 
 ```yaml
 type: custom:search-card
@@ -95,7 +79,7 @@ included_domains:
   - switch
 ```
 
-Exclude automation and script entities:
+### Exclude selected domains
 
 ```yaml
 type: custom:search-card
@@ -104,42 +88,50 @@ excluded_domains:
   - script
 ```
 
-**Note**: The card will show entities from all available domains in your Home Assistant instance unless you specify domain filters.
-
-### Custom Actions
-
-Actions allow you to define service calls triggered by regex matches. Example:
+### Combine include and exclude filters
 
 ```yaml
 type: custom:search-card
-actions:
-  - matches: '^toggle (.+\..+)'
-    name: "Toggle {1}"
-    service: homeassistant.toggle
-    service_data:
-      entity_id: { 1 }
+included_domains:
+  - light
+  - switch
+  - sensor
+excluded_domains:
+  - sensor
 ```
+
+This example shows lights and switches. Sensors are explicitly excluded even
+though they also appear in `included_domains`.
+
+Common Home Assistant domains include `light`, `switch`, `sensor`,
+`binary_sensor`, `climate`, `media_player`, `automation`, `script`, `camera`,
+and `cover`.
+
+## Usage
+
+Start typing to search the entity ID and friendly name of every entity allowed
+by the configured domain filters. Results are sorted by friendly name and
+limited by `max_results`.
+
+Select a result with a pointer or keyboard to open its Home Assistant more-info
+dialog. Entity states remain updated while the results are visible.
 
 ## Troubleshooting
 
-If you encounter issues:
+If the card does not appear or update:
 
-1. Clear browser cache
-2. Restart Home Assistant
-3. Verify card-tools is properly installed
-4. Check your configuration syntax
+1. Verify that `/local/search-card/search-card.js` loads in the browser.
+2. Confirm that the Lovelace resource uses `type: module`.
+3. Increment the resource URL version, for example from `?v=1` to `?v=2`.
+4. Perform a hard browser refresh.
+5. Check the browser console for configuration or JavaScript errors.
+6. Verify that domain filters are arrays of domain names.
 
-For bug reports, please [create an issue](https://github.com/postlund/search-card/issues) with:
+## Development
 
-- Your configuration
-- Home Assistant version
-- Browser and version
-- Error messages (if any)
+The regression tests use the Node.js test runner and have no external
+dependencies:
 
-## Roadmap
-
-Planned features:
-
-- Entity exclusion list
-- "Show all" results button
-- Additional action types
+```bash
+npm test
+```
