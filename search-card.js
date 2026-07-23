@@ -1,6 +1,7 @@
 const BUILTIN_ACTIONS = [
   {
-    matches: "^((magnet:.*)|(.*.torrent.*))$",
+    matches: "^((magnet:\\?.+)|(.*\\.torrent(?:[?#].*)?))$",
+    flags: "i",
     name: "Add to Transmission",
     icon: "mdi:progress-download",
     service: "transmission.add_torrent",
@@ -8,11 +9,25 @@ const BUILTIN_ACTIONS = [
   },
 ];
 
-const matchAndReplace = (text, matches) => {
-  for (var i = 0; i < matches.length; i++) {
-    text = text.replace("{" + i + "}", matches[i]);
+const matchAndReplace = (value, matches) => {
+  if (typeof value === "string") {
+    return value.replace(/\{(\d+)\}/g, (placeholder, index) => {
+      const replacement = matches[Number(index)];
+      return replacement == null ? placeholder : replacement;
+    });
   }
-  return text;
+  if (Array.isArray(value)) {
+    return value.map((item) => matchAndReplace(item, matches));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        matchAndReplace(item, matches),
+      ]),
+    );
+  }
+  return value;
 };
 
 class SearchCard extends HTMLElement {
@@ -28,28 +43,98 @@ class SearchCard extends HTMLElement {
   }
 
   set hass(hass) {
+    const previousHass = this._hass;
     this._hass = hass;
+
+    if (
+      this._searchValue &&
+      this._config &&
+      this._searchInputsChanged(previousHass, hass)
+    ) {
+      this._performSearch(this._searchValue);
+      return;
+    }
+
     this.shadowRoot.querySelectorAll("state-badge").forEach((badge) => {
       const id = badge.dataset.entity;
-      if (id && hass.states[id]) { badge.stateObj = hass.states[id]; badge.hass = hass; }
+      if (id && hass.states[id]) {
+        badge.stateObj = hass.states[id];
+        badge.hass = hass;
+      }
+    });
+    this.shadowRoot.querySelectorAll(".entity-info").forEach((el) => {
+      const id = el.dataset.entity;
+      if (id && hass.states[id]) {
+        el.textContent = this._getEntityName(hass.states[id], id);
+      }
     });
     this.shadowRoot.querySelectorAll(".entity-state").forEach((el) => {
       const id = el.dataset.entity;
-      if (id && hass.states[id]) el.textContent = this._formatState(hass.states[id]);
+      if (id && hass.states[id]) {
+        el.textContent = this._formatState(hass.states[id]);
+      }
+    });
+    this.shadowRoot.querySelectorAll(".entity-row").forEach((row) => {
+      const id = row.dataset.entity;
+      if (id && hass.states[id]) {
+        row.setAttribute(
+          "aria-label",
+          `${this._getEntityName(hass.states[id], id)}: ${this._formatState(hass.states[id])}`,
+        );
+      }
     });
   }
 
   setConfig(config) {
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+      throw new Error("Search Card configuration must be an object");
+    }
+    if (
+      config.max_results !== undefined &&
+      (!Number.isInteger(config.max_results) || config.max_results < 0)
+    ) {
+      throw new Error("max_results must be a non-negative integer");
+    }
+    if (
+      config.search_text !== undefined &&
+      typeof config.search_text !== "string"
+    ) {
+      throw new Error("search_text must be a string");
+    }
+
+    this._validateDomains(config.included_domains, "included_domains");
+    this._validateDomains(config.excluded_domains, "excluded_domains");
+
+    if (config.actions !== undefined && !Array.isArray(config.actions)) {
+      throw new Error("actions must be an array");
+    }
+
     this._config = config;
-    this._maxResults = config.max_results || 10;
-    this._searchPlaceholder = config.search_text || "Search entities…";
-    this._actions = BUILTIN_ACTIONS.concat(config.actions || []);
-    this._includedDomains = config.included_domains;
-    this._excludedDomains = config.excluded_domains || [];
+    this._maxResults = config.max_results ?? 10;
+    this._searchPlaceholder = config.search_text ?? "Search entities…";
+    this._actions = BUILTIN_ACTIONS.concat(config.actions || []).map(
+      (action, index) => this._normalizeAction(action, index),
+    );
+    this._includedDomains = config.included_domains
+      ? new Set(config.included_domains)
+      : null;
+    this._excludedDomains = new Set(config.excluded_domains || []);
     this._render();
+    if (this._hass && this._searchValue) {
+      this._performSearch(this._searchValue);
+    }
   }
 
-  getCardSize() { return 4; }
+  getCardSize() {
+    const entityRows = Math.min(this._results.length, this._maxResults || 0);
+    const rowCount = entityRows + this._activeActions.length;
+    const height = 56 + (rowCount > 0 ? 34 + rowCount * 40 : 0);
+    return Math.max(1, Math.ceil(height / 50));
+  }
+
+  disconnectedCallback() {
+    this._debouncedSearch.cancel();
+  }
 
   _render() {
     this.shadowRoot.innerHTML = `
@@ -157,9 +242,17 @@ class SearchCard extends HTMLElement {
         .entity-row {
           display: flex;
           align-items: center;
+          width: calc(100% + 16px);
           height: 40px;
           cursor: pointer;
+          appearance: none;
+          box-sizing: border-box;
+          border: none;
           border-radius: calc(var(--ha-card-border-radius, 12px) / 2);
+          background: transparent;
+          color: inherit;
+          font: inherit;
+          text-align: left;
           transition: background-color 0.12s ease;
           margin: 0 -8px;
           padding: 0 8px;
@@ -200,9 +293,17 @@ class SearchCard extends HTMLElement {
         .action-row {
           display: flex;
           align-items: center;
+          width: calc(100% + 16px);
           height: 40px;
           cursor: pointer;
+          appearance: none;
+          box-sizing: border-box;
+          border: none;
           border-radius: calc(var(--ha-card-border-radius, 12px) / 2);
+          background: transparent;
+          color: inherit;
+          font: inherit;
+          text-align: left;
           transition: background-color 0.12s ease;
           margin: 0 -8px;
           padding: 0 8px;
@@ -210,6 +311,18 @@ class SearchCard extends HTMLElement {
 
         .action-row:hover {
           background-color: rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.05);
+        }
+
+        .entity-row:focus-visible,
+        .action-row:focus-visible,
+        #clearBtn:focus-visible {
+          outline: 2px solid var(--primary-color, var(--mdc-theme-primary));
+          outline-offset: -2px;
+        }
+
+        .action-row:disabled {
+          cursor: progress;
+          opacity: 0.6;
         }
 
         .action-icon {
@@ -245,14 +358,13 @@ class SearchCard extends HTMLElement {
             autocorrect="off"
             autocapitalize="off"
             spellcheck="false"
-            placeholder="${this._searchPlaceholder}"
           />
-          <button id="clearBtn" title="Clear" aria-label="Clear">
+          <button id="clearBtn" type="button" title="Clear search" aria-label="Clear search">
             <ha-icon icon="mdi:close"></ha-icon>
           </button>
         </div>
         <div id="resultsWrap">
-          <div id="count"></div>
+          <div id="count" aria-live="polite"></div>
           <div id="rows"></div>
         </div>
       </ha-card>
@@ -260,17 +372,30 @@ class SearchCard extends HTMLElement {
 
     const input = this.shadowRoot.getElementById("searchInput");
     const clearBtn = this.shadowRoot.getElementById("clearBtn");
+    const updateClearButton = (visible) => {
+      clearBtn.classList.toggle("visible", visible);
+      clearBtn.tabIndex = visible ? 0 : -1;
+      clearBtn.setAttribute("aria-hidden", String(!visible));
+    };
+    input.placeholder = this._searchPlaceholder;
+    input.setAttribute(
+      "aria-label",
+      this._searchPlaceholder || "Search entities",
+    );
+    input.value = this._searchValue;
+    updateClearButton(this._searchValue.length > 0);
 
     input.addEventListener("input", (e) => {
       this._searchValue = e.target.value;
-      clearBtn.classList.toggle("visible", this._searchValue.length > 0);
+      updateClearButton(this._searchValue.length > 0);
       this._debouncedSearch(this._searchValue);
     });
 
     clearBtn.addEventListener("click", () => {
+      this._debouncedSearch.cancel();
       this._searchValue = "";
       input.value = "";
-      clearBtn.classList.remove("visible");
+      updateClearButton(false);
       this._results = [];
       this._activeActions = [];
       this._renderResults();
@@ -285,7 +410,17 @@ class SearchCard extends HTMLElement {
     const rowsEl = this.shadowRoot.getElementById("rows");
     if (!resultsWrap) return;
 
-    const results = this._results.slice(0, this._maxResults).sort();
+    const collator = new Intl.Collator(this._hass?.locale?.language, {
+      sensitivity: "base",
+      numeric: true,
+    });
+    const results = [...this._results]
+      .sort((left, right) => {
+        const leftName = this._getEntityName(this._hass?.states[left], left);
+        const rightName = this._getEntityName(this._hass?.states[right], right);
+        return collator.compare(leftName, rightName) || collator.compare(left, right);
+      })
+      .slice(0, this._maxResults);
     const hasContent = results.length > 0 || this._activeActions.length > 0;
 
     resultsWrap.classList.toggle("visible", hasContent);
@@ -294,7 +429,10 @@ class SearchCard extends HTMLElement {
 
     if (!hasContent) { countEl.textContent = ""; return; }
 
-    countEl.textContent = `Showing ${results.length} of ${this._results.length} results`;
+    countEl.textContent =
+      this._results.length > 0
+        ? `Showing ${results.length} of ${this._results.length} results`
+        : "";
 
     for (const [action, matches] of this._activeActions) {
       rowsEl.appendChild(this._createActionRow(action, matches));
@@ -306,10 +444,16 @@ class SearchCard extends HTMLElement {
 
   _createEntityRow(entity_id) {
     const state = this._hass?.states[entity_id];
-    const friendlyName = state?.attributes?.friendly_name || entity_id;
+    const friendlyName = this._getEntityName(state, entity_id);
 
-    const row = document.createElement("div");
+    const row = document.createElement("button");
     row.className = "entity-row";
+    row.type = "button";
+    row.dataset.entity = entity_id;
+    row.setAttribute(
+      "aria-label",
+      `${friendlyName}: ${this._formatState(state)}`,
+    );
 
     const badge = document.createElement("state-badge");
     badge.dataset.entity = entity_id;
@@ -318,6 +462,7 @@ class SearchCard extends HTMLElement {
 
     const info = document.createElement("div");
     info.className = "entity-info";
+    info.dataset.entity = entity_id;
     info.textContent = friendlyName;
 
     const stateEl = document.createElement("div");
@@ -334,13 +479,33 @@ class SearchCard extends HTMLElement {
 
   _formatState(state) {
     if (!state) return "";
+    if (typeof this._hass?.formatEntityState === "function") {
+      try {
+        return this._hass.formatEntityState(state);
+      } catch (err) {
+        console.warn("Search Card could not format an entity state", err);
+      }
+    }
     const unit = state.attributes?.unit_of_measurement;
     return unit ? `${state.state} ${unit}` : state.state;
   }
 
+  _getEntityName(state, entityId) {
+    const fallback = state?.attributes?.friendly_name || entityId;
+    if (state && typeof this._hass?.formatEntityName === "function") {
+      try {
+        return this._hass.formatEntityName(state, fallback) || fallback;
+      } catch (err) {
+        console.warn("Search Card could not format an entity name", err);
+      }
+    }
+    return fallback;
+  }
+
   _createActionRow(action, matches) {
-    const row = document.createElement("div");
+    const row = document.createElement("button");
     row.className = "action-row";
+    row.type = "button";
 
     const iconArea = document.createElement("div");
     iconArea.className = "action-icon";
@@ -351,16 +516,24 @@ class SearchCard extends HTMLElement {
     const name = document.createElement("div");
     name.className = "action-name";
     name.textContent = matchAndReplace(action.name, matches);
+    row.setAttribute("aria-label", name.textContent);
 
     row.appendChild(iconArea);
     row.appendChild(name);
-    row.addEventListener("click", () => {
-      const service_data = {};
-      for (var key in action.service_data) {
-        service_data[key] = matchAndReplace(action.service_data[key], matches);
-      }
+    row.addEventListener("click", async () => {
+      const serviceData = matchAndReplace(action.service_data, matches);
       const [domain, service] = action.service.split(".");
-      this._hass.callService(domain, service, service_data);
+      row.disabled = true;
+      try {
+        await this._hass.callService(domain, service, serviceData);
+      } catch (err) {
+        console.error(
+          `Search Card failed to call ${action.service}`,
+          err,
+        );
+      } finally {
+        row.disabled = false;
+      }
     });
     return row;
   }
@@ -372,31 +545,30 @@ class SearchCard extends HTMLElement {
   }
 
   _performSearch(searchText) {
-    if (!this._config || !this._hass || searchText === "") {
+    const normalizedSearch = searchText.trim().toLocaleLowerCase();
+    if (!this._config || !this._hass || normalizedSearch === "") {
       this._results = [];
       this._activeActions = [];
       this._renderResults();
       return;
     }
-    try {
-      const searchRegex = new RegExp(searchText, "i");
-      const newResults = [];
-      for (const entity_id in this._hass.states) {
-        if (
-          (entity_id.search(searchRegex) >= 0 ||
-            this._hass.states[entity_id].attributes.friendly_name?.search(searchRegex) >= 0) &&
-          (this._includedDomains
-            ? this._includedDomains.includes(entity_id.split(".")[0])
-            : !this._excludedDomains.includes(entity_id.split(".")[0]))
-        ) newResults.push(entity_id);
+
+    const newResults = [];
+    for (const entityId of Object.keys(this._hass.states)) {
+      const domain = entityId.split(".", 1)[0];
+      if (!this._domainAllowed(domain)) continue;
+
+      const state = this._hass.states[entityId];
+      const friendlyName = this._getEntityName(state, entityId);
+      if (
+        entityId.toLocaleLowerCase().includes(normalizedSearch) ||
+        friendlyName.toLocaleLowerCase().includes(normalizedSearch)
+      ) {
+        newResults.push(entityId);
       }
-      this._results = newResults;
-      this._activeActions = this._getActivatedActions(searchText);
-    } catch (err) {
-      console.warn(err);
-      this._results = [];
-      this._activeActions = [];
     }
+    this._results = newResults;
+    this._activeActions = this._getActivatedActions(searchText.trim());
     this._renderResults();
   }
 
@@ -404,7 +576,8 @@ class SearchCard extends HTMLElement {
     const active = [];
     for (const action of this._actions) {
       if (this._serviceExists(action.service)) {
-        const matches = searchText.match(action.matches);
+        action.regex.lastIndex = 0;
+        const matches = action.regex.exec(searchText);
         if (matches != null) active.push([action, matches]);
       }
     }
@@ -414,24 +587,119 @@ class SearchCard extends HTMLElement {
   _serviceExists(serviceCall) {
     const [domain, service] = serviceCall.split(".");
     const s = this._hass?.services[domain];
-    return s && service in s;
+    return Boolean(s && Object.hasOwn(s, service));
+  }
+
+  _domainAllowed(domain) {
+    return (
+      (!this._includedDomains || this._includedDomains.has(domain)) &&
+      !this._excludedDomains.has(domain)
+    );
+  }
+
+  _validateDomains(domains, optionName) {
+    if (
+      domains !== undefined &&
+      (!Array.isArray(domains) ||
+        domains.some((domain) => typeof domain !== "string" || domain === ""))
+    ) {
+      throw new Error(`${optionName} must be an array of domain names`);
+    }
+  }
+
+  _normalizeAction(action, index) {
+    const label = `actions[${index}]`;
+    if (!action || typeof action !== "object" || Array.isArray(action)) {
+      throw new Error(`${label} must be an object`);
+    }
+    if (typeof action.matches !== "string") {
+      throw new Error(`${label}.matches must be a string`);
+    }
+    if (typeof action.name !== "string" || action.name === "") {
+      throw new Error(`${label}.name must be a non-empty string`);
+    }
+    if (
+      typeof action.service !== "string" ||
+      !/^[a-z0-9_]+\.[a-z0-9_]+$/i.test(action.service)
+    ) {
+      throw new Error(`${label}.service must use the domain.service format`);
+    }
+    if (
+      action.service_data !== undefined &&
+      (!action.service_data ||
+        typeof action.service_data !== "object" ||
+        Array.isArray(action.service_data))
+    ) {
+      throw new Error(`${label}.service_data must be an object`);
+    }
+    if (action.flags !== undefined && typeof action.flags !== "string") {
+      throw new Error(`${label}.flags must be a string`);
+    }
+
+    let regex;
+    try {
+      regex = new RegExp(action.matches, action.flags || "");
+    } catch (err) {
+      throw new Error(`${label}.matches is not a valid regular expression: ${err.message}`);
+    }
+
+    return {
+      ...action,
+      service_data: action.service_data || {},
+      regex,
+    };
+  }
+
+  _searchInputsChanged(previousHass, hass) {
+    if (!previousHass) return true;
+    if (previousHass.services !== hass.services) return true;
+    if (previousHass.locale !== hass.locale) return true;
+
+    const previousStates = previousHass.states || {};
+    const states = hass.states || {};
+    const previousIds = Object.keys(previousStates);
+    const ids = Object.keys(states);
+    if (previousIds.length !== ids.length) return true;
+
+    for (const entityId of ids) {
+      const previousState = previousStates[entityId];
+      const state = states[entityId];
+      if (!previousState) return true;
+      if (
+        previousState !== state &&
+        previousState.attributes?.friendly_name !==
+          state.attributes?.friendly_name
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   _debounce(func, wait) {
     let timeout;
-    return function(...args) {
+    const debounced = (...args) => {
       clearTimeout(timeout);
       timeout = setTimeout(() => func(...args), wait);
     };
+    debounced.cancel = () => {
+      clearTimeout(timeout);
+      timeout = undefined;
+    };
+    return debounced;
   }
 }
 
-customElements.define("search-card", SearchCard);
+if (!customElements.get("search-card")) {
+  customElements.define("search-card", SearchCard);
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "search-card",
-  name: "Search Card",
-  preview: true,
-  description: "Card to search entities",
-});
+if (!window.customCards.some((card) => card.type === "search-card")) {
+  window.customCards.push({
+    type: "search-card",
+    name: "Search Card",
+    preview: true,
+    description: "Card to search entities",
+  });
+}
