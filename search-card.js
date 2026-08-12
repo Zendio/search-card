@@ -29,15 +29,10 @@ class SearchCard extends HTMLElement {
 
       const formattedState = this._formatState(state);
       const badge = row.firstElementChild;
-      const stateEl = row.lastElementChild;
 
       badge.stateObj = state;
       badge.hass = hass;
-      stateEl.textContent = formattedState;
-      row.setAttribute(
-        "aria-label",
-        `${this._getEntityName(state, id)}: ${formattedState}`,
-      );
+      this._setStateElement(row, state, id, formattedState);
     });
   }
 
@@ -351,11 +346,6 @@ class SearchCard extends HTMLElement {
     row.className = "entity-row";
     row.type = "button";
     row.dataset.entity = entity_id;
-    row.setAttribute(
-      "aria-label",
-      `${friendlyName}: ${formattedState}`,
-    );
-
     const badge = document.createElement("state-badge");
     badge.stateObj = state;
     badge.hass = this._hass;
@@ -364,15 +354,79 @@ class SearchCard extends HTMLElement {
     info.className = "entity-info";
     info.textContent = friendlyName;
 
-    const stateEl = document.createElement("div");
-    stateEl.className = "entity-state";
-    stateEl.textContent = formattedState;
-
     row.appendChild(badge);
     row.appendChild(info);
-    row.appendChild(stateEl);
+    row.appendChild(this._createStateElement(state, entity_id, formattedState));
+    this._setStateAriaLabel(row, state, entity_id, formattedState);
     row.addEventListener("click", () => this._fireMoreInfo(entity_id));
     return row;
+  }
+
+  _createStateElement(state, entityId, formattedState) {
+    const useRelativeTime = this._usesRelativeTime(state, entityId);
+    const stateEl = document.createElement(
+      useRelativeTime ? "ha-relative-time" : "div",
+    );
+    stateEl.className = "entity-state";
+    this._updateStateElement(stateEl, state, useRelativeTime, formattedState);
+    return stateEl;
+  }
+
+  _setStateElement(row, state, entityId, formattedState) {
+    const useRelativeTime = this._usesRelativeTime(state, entityId);
+    let stateEl = row.lastElementChild;
+    if (this._isRelativeTimeElement(stateEl) !== useRelativeTime) {
+      const replacement = this._createStateElement(
+        state,
+        entityId,
+        formattedState,
+      );
+      row.replaceChild(replacement, stateEl);
+      stateEl = replacement;
+    } else {
+      this._updateStateElement(stateEl, state, useRelativeTime, formattedState);
+    }
+    this._setStateAriaLabel(row, state, entityId, formattedState);
+  }
+
+  _updateStateElement(stateEl, state, useRelativeTime, formattedState) {
+    if (useRelativeTime) {
+      // This is the same HA element used by native entity rows. It localizes
+      // and refreshes the relative time itself, so it stays accurate over time.
+      stateEl.hass = this._hass;
+      stateEl.datetime = state.state;
+      stateEl.capitalize = true;
+      return;
+    }
+    stateEl.textContent = formattedState;
+  }
+
+  _setStateAriaLabel(row, state, entityId, formattedState) {
+    if (this._usesRelativeTime(state, entityId)) {
+      // Let the relative-time element contribute its localized text to the
+      // button's accessible name instead of announcing the absolute timestamp.
+      row.removeAttribute("aria-label");
+      return;
+    }
+    row.setAttribute(
+      "aria-label",
+      `${this._getEntityName(state, entityId)}: ${formattedState}`,
+    );
+  }
+
+  _isRelativeTimeElement(element) {
+    return element?.localName === "ha-relative-time";
+  }
+
+  _usesRelativeTime(state, entityId) {
+    if (!state || state.state === "unknown" || state.state === "unavailable") {
+      return false;
+    }
+    const domain = entityId?.split(".", 1)[0];
+    return (
+      state.attributes?.device_class === "timestamp" ||
+      ["button", "input_button", "scene"].includes(domain)
+    );
   }
 
   _formatState(state) {
